@@ -1,0 +1,12 @@
+[package]
+name = "CoinPool"
+version = "0.0.0"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework/", rev = "devnet" }
+
+[addresses]
+CoinPool = "_"
+
+[dev-addresses]
+CoinPool = "0x11"
