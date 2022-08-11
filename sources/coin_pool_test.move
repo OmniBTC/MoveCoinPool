@@ -137,7 +137,7 @@ module coin_pool::pool_test {
         relayer = @0x22,
         user = @0x33
     )]
-    fun test_withdraw_exceeding_nonce(
+    fun test_withdraw_cached_nonce(
         core_resources: &signer,
         aptos_framework: &signer,
         owner: &signer, 
@@ -147,6 +147,7 @@ module coin_pool::pool_test {
         test_withdraw(core_resources, aptos_framework, owner, relayer, user);
         test_withdraw_nonce(relayer, user, 1);
         test_withdraw_nonce(relayer, user, 10);
+        test_withdraw_nonce(relayer, user, 5);
     }
 
     #[test(
