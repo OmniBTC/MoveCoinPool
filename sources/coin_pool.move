@@ -1,4 +1,4 @@
-module CoinPool::Pool {
+module coin_pool::pool {
     use std::signer;
     use std::vector;
     use aptos_std::type_info;
@@ -87,7 +87,7 @@ module CoinPool::Pool {
     }
 
     /// Check relayer role
-    fun check_relayer(user: &signer) acquires RelayerWhitelist{
+    public fun check_relayer(user: &signer) acquires RelayerWhitelist{
         let addr = signer::address_of(user);
         let whitelist = borrow_global_mut<RelayerWhitelist>(pool_address());
         assert!(vector::contains(&mut whitelist.relayers, &addr), ENOT_RELAYER);
@@ -140,10 +140,6 @@ module CoinPool::Pool {
         let addr = signer::address_of(user);
         assert!(coin::balance<AptosCoin>(addr) >= amount, ENOT_ENOUGH_COIN);
 
-        let pool = borrow_global_mut<Pool>(pool_address());
-        let coin = coin::withdraw<AptosCoin>(user, amount);
-        coin::merge(&mut pool.coin, coin);
-        
         let event_handle = borrow_global_mut<SupplyEventHandle>(pool_address());
         event::emit_event<SupplyEvent>(&mut event_handle.supply_event, SupplyEvent{
             user: addr,
@@ -152,6 +148,10 @@ module CoinPool::Pool {
             nonce: event_handle.counter,
         });
         event_handle.counter = event_handle.counter + 1;
+
+        let pool = borrow_global_mut<Pool>(pool_address());
+        let coin = coin::withdraw<AptosCoin>(user, amount);
+        coin::merge(&mut pool.coin, coin);
     }
 
     /// Withdraw aptos coins from pool
@@ -163,8 +163,6 @@ module CoinPool::Pool {
         let pool = borrow_global_mut<Pool>(pool_address());
         assert!(coin::value(&pool.coin) >= amount, ENOT_ENOUGH_COIN);
 
-        coin::deposit(user, coin::extract(&mut pool.coin, amount));
-
         let event_handle = borrow_global_mut<WithdrawEventHandle>(pool_address());
         event::emit_event<WithdrawEvent>(&mut event_handle.withdraw_event, WithdrawEvent{
             user: user,
@@ -173,6 +171,8 @@ module CoinPool::Pool {
             nonce: event_handle.counter,
         });
         event_handle.counter = event_handle.counter + 1;
+
+        coin::deposit(user, coin::extract(&mut pool.coin, amount));
     }
 
     /// Borrow aptos coins to user
@@ -184,8 +184,6 @@ module CoinPool::Pool {
         let pool = borrow_global_mut<Pool>(pool_address());
         assert!(coin::value(&pool.coin) >= amount, ENOT_ENOUGH_COIN);
 
-        coin::deposit(user, coin::extract(&mut pool.coin, amount));
-
         let event_handle = borrow_global_mut<BorrowEventHandle>(pool_address());
         event::emit_event<BorrowEvent>(&mut event_handle.borrow_event, BorrowEvent{
             user: user,
@@ -194,16 +192,14 @@ module CoinPool::Pool {
             nonce: event_handle.counter,
         });
         event_handle.counter = event_handle.counter + 1;
+
+        coin::deposit(user, coin::extract(&mut pool.coin, amount));
     }
 
     /// Repay debt
     public entry fun repay(user: &signer, amount: u64) acquires Pool, RepayEventHandle {
         let addr = signer::address_of(user);
         assert!(coin::balance<AptosCoin>(addr) >= amount, ENOT_ENOUGH_COIN);
-
-        let pool = borrow_global_mut<Pool>(pool_address());
-        let coin = coin::withdraw<AptosCoin>(user, amount);
-        coin::merge(&mut pool.coin, coin);
 
         let event_handle = borrow_global_mut<RepayEventHandle>(pool_address());
         event::emit_event<RepayEvent>(&mut event_handle.repay_event, RepayEvent{
@@ -213,5 +209,15 @@ module CoinPool::Pool {
             nonce: event_handle.counter,
         });
         event_handle.counter = event_handle.counter + 1;
+
+        let pool = borrow_global_mut<Pool>(pool_address());
+        let coin = coin::withdraw<AptosCoin>(user, amount);
+        coin::merge(&mut pool.coin, coin);
+    }
+
+    #[test_only]
+    public fun pool_coins(): u64 acquires Pool {
+        let token_pool = borrow_global_mut<Pool>(pool_address());
+        coin::value(&token_pool.coin)
     }
 }
