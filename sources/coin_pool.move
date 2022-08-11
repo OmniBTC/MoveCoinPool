@@ -1,6 +1,5 @@
 module coin_pool::pool {
     use std::signer;
-    use std::vector;
     use aptos_std::type_info;
     use aptos_std::event::{Self, EventHandle};
     use aptos_framework::aptos_coin::AptosCoin;
@@ -17,31 +16,30 @@ module coin_pool::pool {
     /// Constants
     const CHAIN_ID: u64 = 22;
 
-    /// Storage
+    /// Resources
+    /// There are no resources for users here, all the resources are in the pool.
     struct Pool has key {
-        coin: Coin<AptosCoin>, 
-    }
+        coin: Coin<AptosCoin>,
+        // authority management
+        relayer: address,
 
-    struct RelayerWhitelist has key, store {
-        relayers: vector<address>,
+        // event handler
+        supply_nonce: u64,
+        supply_event: EventHandle<SupplyEvent>,
+        withdraw_nonce: u64,
+        withdraw_event: EventHandle<WithdrawEvent>,
+        borrow_nonce: u64,
+        borrow_event: EventHandle<BorrowEvent>,
+        repay_nonce: u64,
+        repay_event: EventHandle<RepayEvent>
     }
 
     /// Events
-    struct SupplyEventHandle has key {
-        counter: u64,
-        supply_event: EventHandle<SupplyEvent>
-    }
-
     struct SupplyEvent has store, drop {
         user: address,
         amount: u64,
         chain_id: u64,
         nonce: u64,
-    }
-
-    struct WithdrawEventHandle has key {
-        counter: u64,
-        withdraw_event: EventHandle<WithdrawEvent>
     }
 
     struct WithdrawEvent has store, drop {
@@ -51,21 +49,11 @@ module coin_pool::pool {
         nonce: u64,
     }
 
-    struct BorrowEventHandle has key {
-        counter: u64,
-        borrow_event: EventHandle<BorrowEvent>
-    }
-
     struct BorrowEvent has store, drop {
         user: address,
         amount: u64,
         chain_id: u64,
         nonce: u64,
-    }
-
-    struct RepayEventHandle has key {
-        counter: u64,
-        repay_event: EventHandle<RepayEvent>
     }
 
     struct RepayEvent has store, drop {
@@ -87,10 +75,10 @@ module coin_pool::pool {
     }
 
     /// Check relayer role
-    public fun check_relayer(user: &signer) acquires RelayerWhitelist{
+    public fun check_relayer(user: &signer) acquires Pool {
         let addr = signer::address_of(user);
-        let whitelist = borrow_global_mut<RelayerWhitelist>(pool_address());
-        assert!(vector::contains(&mut whitelist.relayers, &addr), ENOT_RELAYER);
+        let pool = borrow_global_mut<Pool>(pool_address());
+        assert!(pool.relayer == addr, ENOT_RELAYER);
     }
 
     /// Create pool and relayer whitelist at deployer address
@@ -98,58 +86,45 @@ module coin_pool::pool {
         check_owner(owner);
         let pool = Pool{
             coin: coin::zero<AptosCoin>(),
+            relayer: signer::address_of(owner),
+            supply_nonce: 0,
+            supply_event: event::new_event_handle<SupplyEvent>(owner),
+            withdraw_nonce: 0,
+            withdraw_event: event::new_event_handle<WithdrawEvent>(owner),
+            borrow_nonce: 0,
+            borrow_event: event::new_event_handle<BorrowEvent>(owner),
+            repay_nonce: 0,
+            repay_event: event::new_event_handle<RepayEvent>(owner)
         };
         move_to(owner, pool);
-
-        let whitelist = RelayerWhitelist{
-            relayers: vector::empty()
-        };
-        move_to(owner, whitelist);
-
-        move_to(owner, SupplyEventHandle {
-            counter: 0,
-            supply_event: event::new_event_handle<SupplyEvent>(owner)
-        });
-        move_to(owner, WithdrawEventHandle {
-            counter: 0,
-            withdraw_event: event::new_event_handle<WithdrawEvent>(owner)
-        });
-        move_to(owner, BorrowEventHandle {
-            counter: 0,
-            borrow_event: event::new_event_handle<BorrowEvent>(owner)
-        });
-        move_to(owner, RepayEventHandle {
-            counter: 0,
-            repay_event: event::new_event_handle<RepayEvent>(owner)
-        });
     }
 
-    /// Add relayer 
-    public entry fun add_relayer(owner: &signer, user: address) acquires RelayerWhitelist {
+    /// Set relayer 
+    /// 
+    /// only for owner
+    public entry fun set_relayer(owner: &signer, relayer: address) acquires Pool {
         check_owner(owner);
-        let owner_addr = signer::address_of(owner);
-        assert!(exists<RelayerWhitelist>(owner_addr), ENOT_RELAYER_WHITELIST);
 
-        let whitelist = borrow_global_mut<RelayerWhitelist>(owner_addr);
-        assert!(!vector::contains(&mut whitelist.relayers, &user), EALREADY_RELAYER);
-        vector::push_back(&mut whitelist.relayers, user);
+        let pool = borrow_global_mut<Pool>(pool_address());
+        pool.relayer = relayer;
     }
 
     /// Deposit aptos coins to pool
-    public entry fun supply(user: &signer, amount: u64) acquires Pool, SupplyEventHandle {
+    public entry fun supply(user: &signer, amount: u64) acquires Pool {
         let addr = signer::address_of(user);
         assert!(coin::balance<AptosCoin>(addr) >= amount, ENOT_ENOUGH_COIN);
 
-        let event_handle = borrow_global_mut<SupplyEventHandle>(pool_address());
-        event::emit_event<SupplyEvent>(&mut event_handle.supply_event, SupplyEvent{
+
+        let pool = borrow_global_mut<Pool>(pool_address());
+
+        event::emit_event<SupplyEvent>(&mut pool.supply_event, SupplyEvent{
             user: addr,
             amount: amount,
             chain_id: CHAIN_ID,
-            nonce: event_handle.counter,
+            nonce: pool.supply_nonce,
         });
-        event_handle.counter = event_handle.counter + 1;
+        pool.supply_nonce = pool.supply_nonce + 1;
 
-        let pool = borrow_global_mut<Pool>(pool_address());
         let coin = coin::withdraw<AptosCoin>(user, amount);
         coin::merge(&mut pool.coin, coin);
     }
@@ -157,20 +132,19 @@ module coin_pool::pool {
     /// Withdraw aptos coins from pool
     /// 
     /// only for relayer
-    public entry fun withdraw(relayer: &signer, user: address, amount: u64) acquires Pool, RelayerWhitelist, WithdrawEventHandle {
+    public entry fun withdraw(relayer: &signer, user: address, amount: u64) acquires Pool {
         check_relayer(relayer);
 
         let pool = borrow_global_mut<Pool>(pool_address());
         assert!(coin::value(&pool.coin) >= amount, ENOT_ENOUGH_COIN);
 
-        let event_handle = borrow_global_mut<WithdrawEventHandle>(pool_address());
-        event::emit_event<WithdrawEvent>(&mut event_handle.withdraw_event, WithdrawEvent{
+        event::emit_event<WithdrawEvent>(&mut pool.withdraw_event, WithdrawEvent{
             user: user,
             amount: amount,
             chain_id: CHAIN_ID,
-            nonce: event_handle.counter,
+            nonce: pool.withdraw_nonce,
         });
-        event_handle.counter = event_handle.counter + 1;
+        pool.withdraw_nonce = pool.withdraw_nonce + 1;
 
         coin::deposit(user, coin::extract(&mut pool.coin, amount));
     }
@@ -178,39 +152,38 @@ module coin_pool::pool {
     /// Borrow aptos coins to user
     /// 
     /// only for relayer
-    public entry fun borrow(relayer: &signer, user: address, amount: u64) acquires Pool, RelayerWhitelist, BorrowEventHandle {
+    public entry fun borrow(relayer: &signer, user: address, amount: u64) acquires Pool {
         check_relayer(relayer);
 
         let pool = borrow_global_mut<Pool>(pool_address());
         assert!(coin::value(&pool.coin) >= amount, ENOT_ENOUGH_COIN);
 
-        let event_handle = borrow_global_mut<BorrowEventHandle>(pool_address());
-        event::emit_event<BorrowEvent>(&mut event_handle.borrow_event, BorrowEvent{
+        event::emit_event<BorrowEvent>(&mut pool.borrow_event, BorrowEvent{
             user: user,
             amount: amount,
             chain_id: CHAIN_ID,
-            nonce: event_handle.counter,
+            nonce: pool.borrow_nonce,
         });
-        event_handle.counter = event_handle.counter + 1;
+        pool.borrow_nonce = pool.borrow_nonce + 1;
 
         coin::deposit(user, coin::extract(&mut pool.coin, amount));
     }
 
     /// Repay debt
-    public entry fun repay(user: &signer, amount: u64) acquires Pool, RepayEventHandle {
+    public entry fun repay(user: &signer, amount: u64) acquires Pool {
         let addr = signer::address_of(user);
         assert!(coin::balance<AptosCoin>(addr) >= amount, ENOT_ENOUGH_COIN);
 
-        let event_handle = borrow_global_mut<RepayEventHandle>(pool_address());
-        event::emit_event<RepayEvent>(&mut event_handle.repay_event, RepayEvent{
+        let pool = borrow_global_mut<Pool>(pool_address());
+
+        event::emit_event<RepayEvent>(&mut pool.repay_event, RepayEvent{
             user: addr,
             amount: amount,
             chain_id: CHAIN_ID,
-            nonce: event_handle.counter,
+            nonce: pool.repay_nonce,
         });
-        event_handle.counter = event_handle.counter + 1;
+        pool.repay_nonce = pool.repay_nonce + 1;
 
-        let pool = borrow_global_mut<Pool>(pool_address());
         let coin = coin::withdraw<AptosCoin>(user, amount);
         coin::merge(&mut pool.coin, coin);
     }
