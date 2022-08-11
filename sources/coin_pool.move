@@ -1,5 +1,6 @@
 module coin_pool::pool {
     use std::signer;
+    use std::vector;
     use aptos_std::type_info;
     use aptos_std::event::{Self, EventHandle};
     use aptos_framework::aptos_coin::AptosCoin;
@@ -12,9 +13,12 @@ module coin_pool::pool {
     const ENOT_OWNER: u64 = 4;
     const ENOT_RELAYER: u64 = 5;
     const EALREADY_RELAYER: u64 = 6;
+    const EDUPLICATE_WITHDRAW: u64 = 7;
+    const EDUPLICATE_BORROW: u64 = 8;
 
     /// Constants
-    const CHAIN_ID: u64 = 22;
+    const SOURCE_CHAIN_ID: u64 = 22;
+    const REMOTE_CHAIN_ID: u64 = 1501;
 
     /// Resources
     /// There are no resources for users here, all the resources are in the pool.
@@ -27,8 +31,10 @@ module coin_pool::pool {
         supply_nonce: u64,
         supply_event: EventHandle<SupplyEvent>,
         withdraw_nonce: u64,
+        cached_withdraw: vector<u64>,
         withdraw_event: EventHandle<WithdrawEvent>,
         borrow_nonce: u64,
+        cached_borrow: vector<u64>,
         borrow_event: EventHandle<BorrowEvent>,
         repay_nonce: u64,
         repay_event: EventHandle<RepayEvent>
@@ -90,8 +96,10 @@ module coin_pool::pool {
             supply_nonce: 0,
             supply_event: event::new_event_handle<SupplyEvent>(owner),
             withdraw_nonce: 0,
+            cached_withdraw: vector::empty(),
             withdraw_event: event::new_event_handle<WithdrawEvent>(owner),
             borrow_nonce: 0,
+            cached_borrow: vector::empty(),
             borrow_event: event::new_event_handle<BorrowEvent>(owner),
             repay_nonce: 0,
             repay_event: event::new_event_handle<RepayEvent>(owner)
@@ -120,7 +128,7 @@ module coin_pool::pool {
         event::emit_event<SupplyEvent>(&mut pool.supply_event, SupplyEvent{
             user: addr,
             amount: amount,
-            chain_id: CHAIN_ID,
+            chain_id: REMOTE_CHAIN_ID,
             nonce: pool.supply_nonce,
         });
         pool.supply_nonce = pool.supply_nonce + 1;
@@ -132,39 +140,62 @@ module coin_pool::pool {
     /// Withdraw aptos coins from pool
     /// 
     /// only for relayer
-    public entry fun withdraw(relayer: &signer, user: address, amount: u64) acquires Pool {
+    public entry fun withdraw(relayer: &signer, user: address, amount: u64, nonce: u64) acquires Pool {
         check_relayer(relayer);
 
         let pool = borrow_global_mut<Pool>(pool_address());
         assert!(coin::value(&pool.coin) >= amount, ENOT_ENOUGH_COIN);
+        
+        if (nonce >= pool.withdraw_nonce) {
+            let withdraw_nonce = pool.withdraw_nonce;
+            while (nonce != withdraw_nonce) {
+                vector::push_back(&mut pool.cached_withdraw, withdraw_nonce);
+                withdraw_nonce = withdraw_nonce + 1;
+            };
+            pool.withdraw_nonce = nonce + 1;
+        } else {
+            assert!(vector::contains(&mut pool.cached_withdraw, &nonce), EDUPLICATE_WITHDRAW);
+            let (_, index) = vector::index_of(&mut pool.cached_withdraw, &nonce);
+            vector::remove(&mut pool.cached_withdraw, index);
+        };
 
         event::emit_event<WithdrawEvent>(&mut pool.withdraw_event, WithdrawEvent{
             user: user,
             amount: amount,
-            chain_id: CHAIN_ID,
-            nonce: pool.withdraw_nonce,
+            chain_id: SOURCE_CHAIN_ID,
+            nonce: nonce,
         });
-        pool.withdraw_nonce = pool.withdraw_nonce + 1;
-
         coin::deposit(user, coin::extract(&mut pool.coin, amount));
     }
 
     /// Borrow aptos coins to user
     /// 
     /// only for relayer
-    public entry fun borrow(relayer: &signer, user: address, amount: u64) acquires Pool {
+    public entry fun borrow(relayer: &signer, user: address, amount: u64, nonce: u64) acquires Pool {
         check_relayer(relayer);
 
         let pool = borrow_global_mut<Pool>(pool_address());
         assert!(coin::value(&pool.coin) >= amount, ENOT_ENOUGH_COIN);
 
+        if (nonce >= pool.borrow_nonce) {
+            let borrow_nonce = pool.borrow_nonce;
+            while (nonce != borrow_nonce) {
+                vector::push_back(&mut pool.cached_withdraw, borrow_nonce);
+                borrow_nonce = borrow_nonce + 1;
+            };
+            pool.borrow_nonce = nonce + 1;
+        } else {
+            assert!(vector::contains(&mut pool.cached_borrow, &nonce), EDUPLICATE_WITHDRAW);
+            let (_, index) = vector::index_of(&mut pool.cached_borrow, &nonce);
+            vector::remove(&mut pool.cached_borrow, index);
+        };
+
         event::emit_event<BorrowEvent>(&mut pool.borrow_event, BorrowEvent{
             user: user,
             amount: amount,
-            chain_id: CHAIN_ID,
-            nonce: pool.borrow_nonce,
+            chain_id: SOURCE_CHAIN_ID,
+            nonce: nonce,
         });
-        pool.borrow_nonce = pool.borrow_nonce + 1;
 
         coin::deposit(user, coin::extract(&mut pool.coin, amount));
     }
@@ -179,7 +210,7 @@ module coin_pool::pool {
         event::emit_event<RepayEvent>(&mut pool.repay_event, RepayEvent{
             user: addr,
             amount: amount,
-            chain_id: CHAIN_ID,
+            chain_id: REMOTE_CHAIN_ID,
             nonce: pool.repay_nonce,
         });
         pool.repay_nonce = pool.repay_nonce + 1;

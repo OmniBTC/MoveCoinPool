@@ -93,9 +93,60 @@ module coin_pool::pool_test {
 
         assert!(coin::balance<AptosCoin>(user_addr) == user_init_amount - user_supply_amount, 1);
         assert!(pool_coins() == user_supply_amount, 2);
-        withdraw(relayer, user_addr, user_withdraw_amount);
+        withdraw(relayer, user_addr, user_withdraw_amount, 0);
         assert!(coin::balance<AptosCoin>(user_addr) == user_init_amount, 3);
         assert!(pool_coins() == 0, 4);
+    }
+
+    #[test_only]
+    fun test_withdraw_nonce(
+        relayer: &signer,
+        user: &signer,
+        nonce: u64,
+    ) {
+        let user_addr = signer::address_of(user);
+        let user_withdraw_amount = 50;
+        supply(user, user_withdraw_amount);
+        withdraw(relayer, user_addr, user_withdraw_amount, nonce);
+    }
+
+    #[test(
+        core_resources = @core_resources,
+        aptos_framework = @aptos_framework,
+        owner = @0x11,
+        relayer = @0x22,
+        user = @0x33
+    )]
+    #[expected_failure(abort_code = 0x7)]
+    fun test_withdraw_duplicated_nonce(
+        core_resources: &signer,
+        aptos_framework: &signer,
+        owner: &signer, 
+        relayer: &signer,
+        user: &signer
+    ) {
+        test_withdraw(core_resources, aptos_framework, owner, relayer, user);
+        test_withdraw_nonce(relayer, user, 1);
+        test_withdraw_nonce(relayer, user, 1);
+    }
+
+    #[test(
+        core_resources = @core_resources,
+        aptos_framework = @aptos_framework,
+        owner = @0x11,
+        relayer = @0x22,
+        user = @0x33
+    )]
+    fun test_withdraw_exceeding_nonce(
+        core_resources: &signer,
+        aptos_framework: &signer,
+        owner: &signer, 
+        relayer: &signer,
+        user: &signer
+    ) {
+        test_withdraw(core_resources, aptos_framework, owner, relayer, user);
+        test_withdraw_nonce(relayer, user, 1);
+        test_withdraw_nonce(relayer, user, 10);
     }
 
     #[test(
@@ -129,7 +180,7 @@ module coin_pool::pool_test {
         coin::register_for_test<AptosCoin>(borrow_user);
         assert!(coin::balance<AptosCoin>(borrow_user_addr) == 0, 2);
 
-        borrow(relayer, borrow_user_addr, user_borrow_amount);
+        borrow(relayer, borrow_user_addr, user_borrow_amount, 0);
         assert!(pool_coins() == user_init_amount - user_borrow_amount, 3);
         assert!(coin::balance<AptosCoin>(borrow_user_addr) == user_borrow_amount, 4);
     }
