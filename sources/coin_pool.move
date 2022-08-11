@@ -7,14 +7,10 @@ module coin_pool::pool {
     use aptos_framework::coin::{Self, Coin};
 
     /// Errors
-    const ENOT_ENOUGH_COIN: u64 = 1;
-    const ENOT_EXIST_POOL: u64 = 2;
-    const ENOT_RELAYER_WHITELIST: u64 = 3;
-    const ENOT_OWNER: u64 = 4;
-    const ENOT_RELAYER: u64 = 5;
-    const EALREADY_RELAYER: u64 = 6;
-    const EDUPLICATE_WITHDRAW: u64 = 7;
-    const EDUPLICATE_BORROW: u64 = 8;
+    const ENOT_OWNER: u64 = 1;
+    const ENOT_RELAYER: u64 = 2;
+    const EDUPLICATE_WITHDRAW: u64 = 3;
+    const EDUPLICATE_BORROW: u64 = 4;
 
     /// Constants
     const SOURCE_CHAIN_ID: u64 = 22;
@@ -132,8 +128,6 @@ module coin_pool::pool {
     /// Deposit aptos coins to pool
     public entry fun supply(user: &signer, amount: u64) acquires Pool {
         let addr = signer::address_of(user);
-        assert!(coin::balance<AptosCoin>(addr) >= amount, ENOT_ENOUGH_COIN);
-
 
         let pool = borrow_global_mut<Pool>(pool_address());
 
@@ -156,7 +150,6 @@ module coin_pool::pool {
         check_relayer(relayer);
 
         let pool = borrow_global_mut<Pool>(pool_address());
-        assert!(coin::value(&pool.coin) >= amount, ENOT_ENOUGH_COIN);
         
         if (nonce >= pool.withdraw_nonce) {
             let withdraw_nonce = pool.withdraw_nonce;
@@ -187,17 +180,16 @@ module coin_pool::pool {
         check_relayer(relayer);
 
         let pool = borrow_global_mut<Pool>(pool_address());
-        assert!(coin::value(&pool.coin) >= amount, ENOT_ENOUGH_COIN);
 
         if (nonce >= pool.borrow_nonce) {
             let borrow_nonce = pool.borrow_nonce;
             while (nonce != borrow_nonce) {
-                vector::push_back(&mut pool.cached_withdraw, borrow_nonce);
+                vector::push_back(&mut pool.cached_borrow, borrow_nonce);
                 borrow_nonce = borrow_nonce + 1;
             };
             pool.borrow_nonce = nonce + 1;
         } else {
-            assert!(vector::contains(&mut pool.cached_borrow, &nonce), EDUPLICATE_WITHDRAW);
+            assert!(vector::contains(&mut pool.cached_borrow, &nonce), EDUPLICATE_BORROW);
             let (_, index) = vector::index_of(&mut pool.cached_borrow, &nonce);
             vector::remove(&mut pool.cached_borrow, index);
         };
@@ -215,7 +207,6 @@ module coin_pool::pool {
     /// Repay debt
     public entry fun repay(user: &signer, amount: u64) acquires Pool {
         let addr = signer::address_of(user);
-        assert!(coin::balance<AptosCoin>(addr) >= amount, ENOT_ENOUGH_COIN);
 
         let pool = borrow_global_mut<Pool>(pool_address());
 

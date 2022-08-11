@@ -34,7 +34,7 @@ module coin_pool::pool_test {
     }
 
     #[test(owner = @0x55, user = @0x22)]
-    #[expected_failure(abort_code = 0x4)]
+    #[expected_failure(abort_code = 0x1)]
     fun add_relayer_not_owner(owner: &signer, user: &signer) {
         initialize(owner);
 
@@ -117,7 +117,7 @@ module coin_pool::pool_test {
         relayer = @0x22,
         user = @0x33
     )]
-    #[expected_failure(abort_code = 0x7)]
+    #[expected_failure(abort_code = 0x3)]
     fun test_withdraw_duplicated_nonce(
         core_resources: &signer,
         aptos_framework: &signer,
