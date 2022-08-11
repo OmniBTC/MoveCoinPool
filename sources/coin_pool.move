@@ -28,6 +28,7 @@ module coin_pool::pool {
         relayer: address,
 
         // event handler
+        relayer_change_event: EventHandle<RelayerChangeEvent>,
         supply_nonce: u64,
         supply_event: EventHandle<SupplyEvent>,
         withdraw_nonce: u64,
@@ -41,6 +42,11 @@ module coin_pool::pool {
     }
 
     /// Events
+    struct RelayerChangeEvent has store, drop {
+        old_relayer: address,
+        new_relayer: address,
+    } 
+    
     struct SupplyEvent has store, drop {
         user: address,
         amount: u64,
@@ -93,6 +99,7 @@ module coin_pool::pool {
         let pool = Pool{
             coin: coin::zero<AptosCoin>(),
             relayer: signer::address_of(owner),
+            relayer_change_event: event::new_event_handle<RelayerChangeEvent>(owner),
             supply_nonce: 0,
             supply_event: event::new_event_handle<SupplyEvent>(owner),
             withdraw_nonce: 0,
@@ -114,6 +121,11 @@ module coin_pool::pool {
         check_owner(owner);
 
         let pool = borrow_global_mut<Pool>(pool_address());
+        
+        event::emit_event<RelayerChangeEvent>(&mut pool.relayer_change_event, RelayerChangeEvent{
+            old_relayer: pool.relayer,
+            new_relayer: relayer
+        });
         pool.relayer = relayer;
     }
 
