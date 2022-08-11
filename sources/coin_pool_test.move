@@ -3,7 +3,7 @@ module coin_pool::pool_test {
     use std::signer;
     use aptos_framework::aptos_coin::{Self, AptosCoin};
     use aptos_framework::coin;
-    use coin_pool::pool::{initialize, supply, withdraw, borrow, repay, pool_coins, add_relayer, check_relayer};
+    use coin_pool::pool::{initialize, supply, withdraw, borrow, repay, pool_coins, set_relayer, check_relayer};
 
     #[test_only]
     fun setup_test(
@@ -24,11 +24,11 @@ module coin_pool::pool_test {
     }
 
     #[test(owner = @0x11, user = @0x22)]
-    fun test_add_relayer(owner: &signer, user: &signer) {
+    fun test_set_relayer(owner: &signer, user: &signer) {
         initialize(owner);
 
         let user_addr = signer::address_of(user);
-        add_relayer(owner, user_addr);
+        set_relayer(owner, user_addr);
 
         check_relayer(user);
     }
@@ -39,7 +39,7 @@ module coin_pool::pool_test {
         initialize(owner);
 
         let user_addr = signer::address_of(user);
-        add_relayer(owner, user_addr);
+        set_relayer(owner, user_addr);
     }
 
     #[test(
@@ -89,7 +89,7 @@ module coin_pool::pool_test {
         test_supply(core_resources, aptos_framework, owner, user);
 
         let relayer_addr = signer::address_of(relayer);
-        add_relayer(owner, relayer_addr);
+        set_relayer(owner, relayer_addr);
 
         assert!(coin::balance<AptosCoin>(user_addr) == user_init_amount - user_supply_amount, 1);
         assert!(pool_coins() == user_supply_amount, 2);
@@ -121,7 +121,7 @@ module coin_pool::pool_test {
         supply(supply_user, user_init_amount);
 
         let relayer_addr = signer::address_of(relayer);
-        add_relayer(owner, relayer_addr);
+        set_relayer(owner, relayer_addr);
 
         let user_borrow_amount = 50;
         let borrow_user_addr = signer::address_of(borrow_user);
