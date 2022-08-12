@@ -3,8 +3,8 @@ module coin_pool::pool {
     use std::vector;
     use aptos_std::type_info;
     use aptos_std::event::{Self, EventHandle};
-    use aptos_framework::aptos_coin::AptosCoin;
     use aptos_framework::coin::{Self, Coin};
+    use aptos_framework::account::create_resource_account;
 
     /// Errors
     const ENOT_OWNER: u64 = 1;
@@ -18,8 +18,8 @@ module coin_pool::pool {
 
     /// Resources
     /// There are no resources for users here, all the resources are in the pool.
-    struct Pool has key {
-        coin: Coin<AptosCoin>,
+    struct Pool<phantom CoinType> has key {
+        coin: Coin<CoinType>,
         // authority management
         relayer: address,
 
@@ -71,52 +71,50 @@ module coin_pool::pool {
         nonce: u64,
     }
 
-    /// Deployer address
-    fun pool_address(): address {
-        type_info::account_address(&type_info::type_of<Pool>())
+    struct PoolAccount<phantom CoinType> has key {
+        pool_address: address,
     }
 
-    /// Check owner
-    fun check_owner(owner: &signer) {
-        let owner_addr = signer::address_of(owner);
-        assert!(pool_address() == owner_addr, ENOT_OWNER);
+    /// Pool resource address
+    fun pool_address<CoinType>(): address {
+        type_info::account_address(&type_info::type_of<Pool<CoinType>>())
     }
 
     /// Check relayer role
-    public fun check_relayer(user: &signer) acquires Pool {
+    public fun check_relayer<CoinType>(user: &signer) acquires Pool {
         let addr = signer::address_of(user);
-        let pool = borrow_global_mut<Pool>(pool_address());
+        let pool = borrow_global_mut<Pool<CoinType>>(pool_address<CoinType>());
         assert!(pool.relayer == addr, ENOT_RELAYER);
     }
 
     /// Create pool and relayer whitelist at deployer address
-    public entry fun initialize(owner: &signer) {
-        check_owner(owner);
-        let pool = Pool{
-            coin: coin::zero<AptosCoin>(),
-            relayer: signer::address_of(owner),
-            relayer_change_event: event::new_event_handle<RelayerChangeEvent>(owner),
+    public entry fun create_pool<CoinType>(creator: &signer, seed: vector<u8>) {
+    	let (pool_signer, _) = create_resource_account(creator, seed);
+        let pool = Pool<CoinType>{
+            coin: coin::zero<CoinType>(),
+            relayer: signer::address_of(creator),
+            relayer_change_event: event::new_event_handle<RelayerChangeEvent>(&pool_signer),
             supply_nonce: 0,
-            supply_event: event::new_event_handle<SupplyEvent>(owner),
+            supply_event: event::new_event_handle<SupplyEvent>(&pool_signer),
             withdraw_nonce: 0,
             cached_withdraw: vector::empty(),
-            withdraw_event: event::new_event_handle<WithdrawEvent>(owner),
+            withdraw_event: event::new_event_handle<WithdrawEvent>(&pool_signer),
             borrow_nonce: 0,
             cached_borrow: vector::empty(),
-            borrow_event: event::new_event_handle<BorrowEvent>(owner),
+            borrow_event: event::new_event_handle<BorrowEvent>(&pool_signer),
             repay_nonce: 0,
-            repay_event: event::new_event_handle<RepayEvent>(owner)
+            repay_event: event::new_event_handle<RepayEvent>(&pool_signer)
         };
-        move_to(owner, pool);
+        move_to(&pool_signer, pool);
+        let pool_accout = PoolAccount<CoinType> { pool_address: signer::address_of(&pool_signer) };
+        move_to(creator, pool_accout)
     }
 
     /// Set relayer 
-    /// 
-    /// only for owner
-    public entry fun set_relayer(owner: &signer, relayer: address) acquires Pool {
-        check_owner(owner);
-
-        let pool = borrow_global_mut<Pool>(pool_address());
+    public entry fun set_relayer<CoinType>(creator: &signer, relayer: address) acquires Pool, PoolAccount {
+        let creator_address = signer::address_of(creator);
+        let pool_account = borrow_global<PoolAccount<CoinType>>(creator_address);
+        let pool = borrow_global_mut<Pool<CoinType>>(pool_account.pool_address);
         
         event::emit_event<RelayerChangeEvent>(&mut pool.relayer_change_event, RelayerChangeEvent{
             old_relayer: pool.relayer,
@@ -126,10 +124,10 @@ module coin_pool::pool {
     }
 
     /// Deposit aptos coins to pool
-    public entry fun supply(user: &signer, amount: u64) acquires Pool {
+    public entry fun supply<CoinType>(user: &signer, amount: u64) acquires Pool {
         let addr = signer::address_of(user);
 
-        let pool = borrow_global_mut<Pool>(pool_address());
+        let pool = borrow_global_mut<Pool<CoinType>>(pool_address<CoinType>());
 
         event::emit_event<SupplyEvent>(&mut pool.supply_event, SupplyEvent{
             user: addr,
@@ -139,17 +137,17 @@ module coin_pool::pool {
         });
         pool.supply_nonce = pool.supply_nonce + 1;
 
-        let coin = coin::withdraw<AptosCoin>(user, amount);
+        let coin = coin::withdraw<CoinType>(user, amount);
         coin::merge(&mut pool.coin, coin);
     }
 
     /// Withdraw aptos coins from pool
     /// 
     /// only for relayer
-    public entry fun withdraw(relayer: &signer, user: address, amount: u64, nonce: u64) acquires Pool {
-        check_relayer(relayer);
+    public entry fun withdraw<CoinType>(relayer: &signer, user: address, amount: u64, nonce: u64) acquires Pool {
+        check_relayer<CoinType>(relayer);
 
-        let pool = borrow_global_mut<Pool>(pool_address());
+        let pool = borrow_global_mut<Pool<CoinType>>(pool_address<CoinType>());
         
         if (nonce >= pool.withdraw_nonce) {
             let withdraw_nonce = pool.withdraw_nonce;
@@ -176,10 +174,10 @@ module coin_pool::pool {
     /// Borrow aptos coins to user
     /// 
     /// only for relayer
-    public entry fun borrow(relayer: &signer, user: address, amount: u64, nonce: u64) acquires Pool {
-        check_relayer(relayer);
+    public entry fun borrow<CoinType>(relayer: &signer, user: address, amount: u64, nonce: u64) acquires Pool {
+        check_relayer<CoinType>(relayer);
 
-        let pool = borrow_global_mut<Pool>(pool_address());
+        let pool = borrow_global_mut<Pool<CoinType>>(pool_address<CoinType>());
 
         if (nonce >= pool.borrow_nonce) {
             let borrow_nonce = pool.borrow_nonce;
@@ -205,10 +203,10 @@ module coin_pool::pool {
     }
 
     /// Repay debt
-    public entry fun repay(user: &signer, amount: u64) acquires Pool {
+    public entry fun repay<CoinType>(user: &signer, amount: u64) acquires Pool {
         let addr = signer::address_of(user);
 
-        let pool = borrow_global_mut<Pool>(pool_address());
+        let pool = borrow_global_mut<Pool<CoinType>>(pool_address<CoinType>());
 
         event::emit_event<RepayEvent>(&mut pool.repay_event, RepayEvent{
             user: addr,
@@ -218,13 +216,13 @@ module coin_pool::pool {
         });
         pool.repay_nonce = pool.repay_nonce + 1;
 
-        let coin = coin::withdraw<AptosCoin>(user, amount);
+        let coin = coin::withdraw<CoinType>(user, amount);
         coin::merge(&mut pool.coin, coin);
     }
 
     #[test_only]
-    public fun pool_coins(): u64 acquires Pool {
-        let token_pool = borrow_global_mut<Pool>(pool_address());
+    public fun pool_coins<CoinType>(): u64 acquires Pool {
+        let token_pool = borrow_global_mut<Pool<CoinType>>(pool_address<CoinType>());
         coin::value(&token_pool.coin)
     }
 }
