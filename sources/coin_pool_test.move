@@ -190,7 +190,6 @@ module coin_pool::pool_test {
         core_resources = @core_resources,
         aptos_framework = @aptos_framework,
         owner = @0x11,
-        relayer = @0x22,
         user = @0x33,
     )]
     fun test_repay(

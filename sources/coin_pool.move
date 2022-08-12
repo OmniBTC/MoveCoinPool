@@ -75,20 +75,28 @@ module coin_pool::pool {
         pool_address: address,
     }
 
+    /// Deployer address
+    fun deployer_address<CoinType>(): address {
+        type_info::account_address(&type_info::type_of<PoolAccount<CoinType>>())
+    }
+
     /// Pool resource address
-    fun pool_address<CoinType>(): address {
-        type_info::account_address(&type_info::type_of<Pool<CoinType>>())
+    fun pool_address<CoinType>(): address acquires PoolAccount {
+        let deployer_address = deployer_address<CoinType>();
+        let pool_account = borrow_global<PoolAccount<CoinType>>(deployer_address);
+        pool_account.pool_address
     }
 
     /// Check relayer role
-    public fun check_relayer<CoinType>(user: &signer) acquires Pool {
+    public fun check_relayer<CoinType>(user: &signer) acquires Pool, PoolAccount {
         let addr = signer::address_of(user);
         let pool = borrow_global_mut<Pool<CoinType>>(pool_address<CoinType>());
         assert!(pool.relayer == addr, ENOT_RELAYER);
     }
 
-    /// Create pool and relayer whitelist at deployer address
+    /// Create pool
     public entry fun create_pool<CoinType>(creator: &signer, seed: vector<u8>) {
+        assert!(signer::address_of(creator) == deployer_address<CoinType>(), ENOT_OWNER);
     	let (pool_signer, _) = create_resource_account(creator, seed);
         let pool = Pool<CoinType>{
             coin: coin::zero<CoinType>(),
@@ -124,7 +132,7 @@ module coin_pool::pool {
     }
 
     /// Deposit aptos coins to pool
-    public entry fun supply<CoinType>(user: &signer, amount: u64) acquires Pool {
+    public entry fun supply<CoinType>(user: &signer, amount: u64) acquires Pool, PoolAccount {
         let addr = signer::address_of(user);
 
         let pool = borrow_global_mut<Pool<CoinType>>(pool_address<CoinType>());
@@ -144,7 +152,7 @@ module coin_pool::pool {
     /// Withdraw aptos coins from pool
     /// 
     /// only for relayer
-    public entry fun withdraw<CoinType>(relayer: &signer, user: address, amount: u64, nonce: u64) acquires Pool {
+    public entry fun withdraw<CoinType>(relayer: &signer, user: address, amount: u64, nonce: u64) acquires Pool, PoolAccount {
         check_relayer<CoinType>(relayer);
 
         let pool = borrow_global_mut<Pool<CoinType>>(pool_address<CoinType>());
@@ -174,7 +182,7 @@ module coin_pool::pool {
     /// Borrow aptos coins to user
     /// 
     /// only for relayer
-    public entry fun borrow<CoinType>(relayer: &signer, user: address, amount: u64, nonce: u64) acquires Pool {
+    public entry fun borrow<CoinType>(relayer: &signer, user: address, amount: u64, nonce: u64) acquires Pool, PoolAccount {
         check_relayer<CoinType>(relayer);
 
         let pool = borrow_global_mut<Pool<CoinType>>(pool_address<CoinType>());
@@ -203,7 +211,7 @@ module coin_pool::pool {
     }
 
     /// Repay debt
-    public entry fun repay<CoinType>(user: &signer, amount: u64) acquires Pool {
+    public entry fun repay<CoinType>(user: &signer, amount: u64) acquires Pool, PoolAccount {
         let addr = signer::address_of(user);
 
         let pool = borrow_global_mut<Pool<CoinType>>(pool_address<CoinType>());
@@ -221,7 +229,7 @@ module coin_pool::pool {
     }
 
     #[test_only]
-    public fun pool_coins<CoinType>(): u64 acquires Pool {
+    public fun pool_coins<CoinType>(): u64 acquires Pool, PoolAccount {
         let token_pool = borrow_global_mut<Pool<CoinType>>(pool_address<CoinType>());
         coin::value(&token_pool.coin)
     }
