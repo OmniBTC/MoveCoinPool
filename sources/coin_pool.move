@@ -1,9 +1,10 @@
 module coin_pool::pool {
+    use std::string::String;
     use std::signer;
     use std::vector;
     use aptos_std::type_info;
     use aptos_std::event::{Self, EventHandle};
-    use aptos_framework::coin::{Self, Coin};
+    use aptos_framework::coin::{Self, Coin, symbol};
     use aptos_framework::account::create_resource_account;
 
     /// Errors
@@ -53,6 +54,7 @@ module coin_pool::pool {
         amount: u64,
         chain_id: u64,
         nonce: u64,
+        symbol: String
     }
 
     struct WithdrawEvent has store, drop {
@@ -60,6 +62,7 @@ module coin_pool::pool {
         amount: u64,
         chain_id: u64,
         nonce: u64,
+        symbol: String
     }
 
     struct BorrowEvent has store, drop {
@@ -67,6 +70,7 @@ module coin_pool::pool {
         amount: u64,
         chain_id: u64,
         nonce: u64,
+        symbol: String
     }
 
     struct RepayEvent has store, drop {
@@ -74,6 +78,7 @@ module coin_pool::pool {
         amount: u64,
         chain_id: u64,
         nonce: u64,
+        symbol: String
     }
 
     struct PoolAccount<phantom CoinType> has key {
@@ -161,6 +166,7 @@ module coin_pool::pool {
             amount: amount,
             chain_id: REMOTE_CHAIN_ID,
             nonce: event_handle.supply_nonce,
+            symbol: symbol<CoinType>()
         });
         event_handle.supply_nonce = event_handle.supply_nonce + 1;
 
@@ -195,6 +201,7 @@ module coin_pool::pool {
             amount: amount,
             chain_id: SOURCE_CHAIN_ID,
             nonce: nonce,
+            symbol: symbol<CoinType>()
         });
         coin::deposit(user, coin::extract(&mut pool.coin, amount));
     }
@@ -226,6 +233,7 @@ module coin_pool::pool {
             amount: amount,
             chain_id: SOURCE_CHAIN_ID,
             nonce: nonce,
+            symbol: symbol<CoinType>()
         });
 
         coin::deposit(user, coin::extract(&mut pool.coin, amount));
@@ -243,6 +251,7 @@ module coin_pool::pool {
             amount: amount,
             chain_id: REMOTE_CHAIN_ID,
             nonce: event_handle.repay_nonce,
+            symbol: symbol<CoinType>()
         });
         event_handle.repay_nonce = event_handle.repay_nonce + 1;
 
