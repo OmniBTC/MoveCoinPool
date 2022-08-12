@@ -3,7 +3,7 @@ module coin_pool::pool_test {
     use std::signer;
     use aptos_framework::aptos_coin::{Self, AptosCoin};
     use aptos_framework::coin;
-    use coin_pool::pool::{create_pool, supply, withdraw, borrow, repay, pool_coins, set_relayer, check_relayer};
+    use coin_pool::pool::{create_pool, supply, withdraw, borrow, repay, pool_coins, set_relayer, check_relayer, init_module};
 
     #[test_only]
     fun setup_test(
@@ -25,6 +25,7 @@ module coin_pool::pool_test {
 
     #[test(owner = @0x11, user = @0x22)]
     fun test_set_relayer(owner: &signer, user: &signer) {
+        init_module(owner);
         create_pool<AptosCoin>(owner, x"01");
 
         let user_addr = signer::address_of(user);
@@ -36,6 +37,7 @@ module coin_pool::pool_test {
     #[test(owner = @0x55, user = @0x22)]
     #[expected_failure(abort_code = 0x1)]
     fun add_relayer_not_owner(owner: &signer, user: &signer) {
+        init_module(owner);
         create_pool<AptosCoin>(owner, x"01");
 
         let user_addr = signer::address_of(user);
@@ -57,6 +59,7 @@ module coin_pool::pool_test {
         let user_init_amount = 100;
         setup_test(aptos_framework, core_resources, user, user_init_amount);
 
+        init_module(owner);
         create_pool<AptosCoin>(owner, x"01");
 
         let user_addr = signer::address_of(user);
@@ -169,6 +172,7 @@ module coin_pool::pool_test {
         let user_init_amount = 100;
         setup_test(aptos_framework, core_resources, supply_user, user_init_amount);
 
+        init_module(owner);
         create_pool<AptosCoin>(owner, x"01");
         supply<AptosCoin>(supply_user, user_init_amount);
 
@@ -201,6 +205,7 @@ module coin_pool::pool_test {
         let user_init_amount = 100;
         setup_test(aptos_framework, core_resources, user, user_init_amount);
 
+        init_module(owner);
         create_pool<AptosCoin>(owner, x"01");
 
         let user_repay_amount = 50;
