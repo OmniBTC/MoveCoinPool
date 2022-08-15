@@ -1,4 +1,4 @@
-module coin_pool::pool1 {
+module coin_pool::singel_pool {
     use aptos_framework::coin::{Coin, Self};
     use std::signer;
     use std::option::{Option, Self};
