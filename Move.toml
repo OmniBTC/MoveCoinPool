@@ -3,7 +3,7 @@ name = "CoinPool"
 version = "0.1.0"
 
 [dependencies]
-AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework/", rev = "main" }
+AptosFramework = { local = "../meta/aptos/aptos-core/aptos-move/framework/aptos-framework" }
 
 [addresses]
 std = "0x1"
