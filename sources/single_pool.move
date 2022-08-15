@@ -114,6 +114,12 @@ module coin_pool::singel_pool {
         root.pool_address
     }
 
+    public fun withdraw_proof_collection<CoinType>(user_addr: address): (vector<address>, vector<WithdrawProof<CoinType>>) acquires WithdrawProofCollection {
+        assert!(has_withdraw_collection<CoinType>(user_addr), PROOF_NOT_EXIST);
+        let withdraw_proof_collection = borrow_global<WithdrawProofCollection<CoinType>>(user_addr);
+        (withdraw_proof_collection.proof_indexs, withdraw_proof_collection.proofs)
+    }
+
     /// Returns `true` if pool recoreder has been initialized.
     public entry fun pool_recorder_initialized(): bool {
         let deployed_addr = deployed_address();
@@ -130,7 +136,6 @@ module coin_pool::singel_pool {
         exists<RootCapabilityCollection<CoinType>>(user_addr)
     }
 
-    #[test_only]
     public fun has_withdraw_collection<CoinType>(user_addr: address): bool {
         exists<WithdrawProofCollection<CoinType>>(user_addr)
     }
@@ -171,6 +176,7 @@ module coin_pool::singel_pool {
             let root_collection = borrow_global_mut<RootCapabilityCollection<CoinType>>(account);
             let (flag, index) = vector::index_of(&mut root_collection.root_indexs, &pool_address);
             if (flag) {
+                vector::swap_remove(&mut root_collection.root_indexs, index);
                 option::some(vector::swap_remove(&mut root_collection.roots, index))
             } else {
                 option::none()
@@ -186,6 +192,7 @@ module coin_pool::singel_pool {
             let proof_collection = borrow_global_mut<WithdrawProofCollection<CoinType>>(account);
             let (flag, index) = vector::index_of(&mut proof_collection.proof_indexs, &pool_address);
             if (flag) {
+                vector::swap_remove(&mut proof_collection.proof_indexs, index);
                 option::some(vector::swap_remove(&mut proof_collection.proofs, index))
             } else {
                 option::none()
