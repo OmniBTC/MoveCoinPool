@@ -81,12 +81,12 @@ module coin_pool::singel_pool {
     /// Root privileges. The owner of RootCapability has root privileges to the pool represented by pool_address.
     /// You can manage RootCapability yourself in an external program,
     /// or you can manage it directly with RootCapabilityCollection
-    struct RootCapability<phantom CoinType> has store {
+    struct RootCapability<phantom CoinType> has store, drop {
         pool_address: address
     }
 
     /// root privilege collection.
-    struct RootCapabilityCollection<phantom CoinType> has key, store {
+    struct RootCapabilityCollection<phantom CoinType> has key {
         root_indexs: vector<address>,
         roots: vector<RootCapability<CoinType>>
     }
@@ -95,13 +95,13 @@ module coin_pool::singel_pool {
     /// The owner of WithdrawProof can withdraw the amount of coins from the pool represented by pool_address.
     /// You can manage WithdrawProof yourself in an external program,
     /// or you can manage it directly with WithdrawProofCollection
-    struct WithdrawProof<phantom CoinType> has store {
+    struct WithdrawProof<phantom CoinType> has store, drop {
         pool_address: address,
         amount: u64
     }
 
     /// Proof collection
-    struct WithdrawProofCollection<phantom CoinType> has key, store {
+    struct WithdrawProofCollection<phantom CoinType> has key {
         proof_indexs: vector<address>,
         proofs: vector<WithdrawProof<CoinType>>
     }
@@ -123,6 +123,16 @@ module coin_pool::singel_pool {
     /// Returns `true` if `pool` has been created.
     public fun is_pool_created<CoinType>(pool_addess: address): bool {
         exists<Pool<CoinType>>(pool_addess)
+    }
+
+    #[test_only]
+    public fun has_root_collection<CoinType>(user_addr: address): bool {
+        exists<RootCapabilityCollection<CoinType>>(user_addr)
+    }
+
+    #[test_only]
+    public fun has_withdraw_collection<CoinType>(user_addr: address): bool {
+        exists<WithdrawProofCollection<CoinType>>(user_addr)
     }
 
     /// Add root into collection. Note that it does not do root existence checks.
@@ -261,8 +271,7 @@ module coin_pool::singel_pool {
     fun supply_internal<CoinType>(account: &signer, pool_address: address, amount: u64): WithdrawProof<CoinType> acquires Pool {
         assert!(is_pool_created<CoinType>(pool_address), POOL_NOT_EXIST);
 
-        let account_addr = signer::address_of(account);
-        let pool = borrow_global_mut<Pool<CoinType>>(account_addr);
+        let pool = borrow_global_mut<Pool<CoinType>>(pool_address);
 
         let account_coin = coin::withdraw<CoinType>(account, amount);
         coin::merge(&mut pool.coin, account_coin);
