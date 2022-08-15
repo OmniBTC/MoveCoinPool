@@ -107,7 +107,11 @@ module coin_pool::singel_pool {
     }
 
     public fun deployed_address(): address {
-        type_info::account_address(&type_info::type_of<PoolRecorder>())
+        @coin_pool
+    }
+
+    public fun get_pool_address_by_root<CoinType>(root: &RootCapability<CoinType>): address {
+        root.pool_address
     }
 
     /// Returns `true` if pool recoreder has been initialized.
@@ -229,7 +233,7 @@ module coin_pool::singel_pool {
     }
 
     /// Create a pool of tokens and store root permissions directly in the creator's address.
-    public fun create_pool<CoinType>(creater: &signer) acquires RootCapabilityCollection, PoolRecorder {
+    public entry fun create_pool<CoinType>(creater: &signer) acquires RootCapabilityCollection, PoolRecorder {
         add_root_collection(creater, create_pool_internal<CoinType>(creater));
     }
 
