@@ -114,12 +114,6 @@ module coin_pool::singel_pool {
         root.pool_address
     }
 
-    public fun withdraw_proof_collection<CoinType>(user_addr: address): (vector<address>, vector<WithdrawProof<CoinType>>) acquires WithdrawProofCollection {
-        assert!(has_withdraw_collection<CoinType>(user_addr), PROOF_NOT_EXIST);
-        let withdraw_proof_collection = borrow_global<WithdrawProofCollection<CoinType>>(user_addr);
-        (withdraw_proof_collection.proof_indexs, withdraw_proof_collection.proofs)
-    }
-
     /// Returns `true` if pool recoreder has been initialized.
     public entry fun pool_recorder_initialized(): bool {
         let deployed_addr = deployed_address();
