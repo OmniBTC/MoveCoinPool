@@ -143,7 +143,7 @@ module coin_pool::singel_pool {
             })
         };
         let root_collection = borrow_global_mut<RootCapabilityCollection<CoinType>>(account_addr);
-        bucket_table::add(&mut root_collection.roots, account_addr, root)
+        bucket_table::add(&mut root_collection.roots, root.pool_address, root)
     }
 
     /// Add proof into collection. Note that it does not do proof existence checks.
@@ -155,7 +155,7 @@ module coin_pool::singel_pool {
             })
         };
         let proof_collection = borrow_global_mut<WithdrawProofCollection<CoinType>>(account_addr);
-        bucket_table::add(&mut proof_collection.proofs, account_addr, proof)
+        bucket_table::add(&mut proof_collection.proofs, proof.pool_address, proof);
     }
 
     /// Find root in collection. This is must be private function.
@@ -287,7 +287,6 @@ module coin_pool::singel_pool {
     /// WithdrawProof is managed by WithdrawProofCollection.
     public entry fun supply<CoinType>(account: &signer, pool_address: address, amount: u64) acquires Pool, WithdrawProofCollection {
         let proof = supply_internal<CoinType>(account, pool_address, amount);
-
         let account_addr = signer::address_of(account);
 
         let result = find_proof_collection<CoinType>(account_addr, pool_address);
