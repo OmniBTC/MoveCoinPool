@@ -1,5 +1,4 @@
 module coin_pool::singel_pool {
-    use aptos_framework::coin::{Coin, Self};
     use std::signer;
     use std::option::{Option, Self};
     use std::vector;
@@ -7,6 +6,8 @@ module coin_pool::singel_pool {
     use aptos_std::event::EventHandle;
     use aptos_std::type_info;
     use aptos_std::event;
+    use aptos_framework::coin::{Coin, Self};
+    use aptos_framework::bucket_table;
     use aptos_framework::block::get_current_block_height;
 
     //
@@ -53,8 +54,6 @@ module coin_pool::singel_pool {
     struct Pool<phantom CoinType> has key {
         /// Managed coin.
         coin: Coin<CoinType>,
-        /// Pool address.
-        pool_address: address
     }
 
     /// Used to record the relevant information of the pool,
@@ -87,8 +86,7 @@ module coin_pool::singel_pool {
 
     /// root privilege collection.
     struct RootCapabilityCollection<phantom CoinType> has key {
-        root_indexs: vector<address>,
-        roots: vector<RootCapability<CoinType>>
+        roots: bucket_table::BucketTable<address, RootCapability<CoinType>>
     }
 
     /// Represents the number of coin that can be withdrawn.
@@ -102,8 +100,7 @@ module coin_pool::singel_pool {
 
     /// Proof collection
     struct WithdrawProofCollection<phantom CoinType> has key {
-        proof_indexs: vector<address>,
-        proofs: vector<WithdrawProof<CoinType>>
+        proofs: bucket_table::BucketTable<address, WithdrawProof<CoinType>>
     }
 
     public fun deployed_address(): address {
@@ -139,13 +136,11 @@ module coin_pool::singel_pool {
         let account_addr = signer::address_of(account);
         if (!exists<RootCapabilityCollection<CoinType>>(account_addr)) {
             move_to(account, RootCapabilityCollection<CoinType> {
-                root_indexs: vector::empty(),
-                roots: vector::empty()
+                roots: bucket_table::new<address, RootCapability<CoinType>>(1)
             })
         };
         let root_collection = borrow_global_mut<RootCapabilityCollection<CoinType>>(account_addr);
-        vector::push_back(&mut root_collection.root_indexs, root.pool_address);
-        vector::push_back(&mut root_collection.roots, root);
+        bucket_table::add(&mut root_collection.roots, account_addr, root)
     }
 
     /// Add proof into collection. Note that it does not do proof existence checks.
@@ -153,13 +148,11 @@ module coin_pool::singel_pool {
         let account_addr = signer::address_of(account);
         if (!exists<WithdrawProofCollection<CoinType>>(account_addr)) {
             move_to(account, WithdrawProofCollection<CoinType> {
-                proof_indexs: vector::empty(),
-                proofs: vector::empty()
+                proofs: bucket_table::new<address, WithdrawProof<CoinType>>(1)
             })
         };
         let proof_collection = borrow_global_mut<WithdrawProofCollection<CoinType>>(account_addr);
-        vector::push_back(&mut proof_collection.proof_indexs, proof.pool_address);
-        vector::push_back(&mut proof_collection.proofs, proof);
+        bucket_table::add(&mut proof_collection.proofs, account_addr, proof)
     }
 
     /// Find root in collection.
@@ -168,10 +161,9 @@ module coin_pool::singel_pool {
             option::none()
         }else {
             let root_collection = borrow_global_mut<RootCapabilityCollection<CoinType>>(account);
-            let (flag, index) = vector::index_of(&mut root_collection.root_indexs, &pool_address);
-            if (flag) {
-                vector::swap_remove(&mut root_collection.root_indexs, index);
-                option::some(vector::swap_remove(&mut root_collection.roots, index))
+            if (bucket_table::contains(&mut root_collection.roots, &pool_address)) {
+                let root_capacity = bucket_table::remove(&mut root_collection.roots, &pool_address);
+                option::some(root_capacity)
             } else {
                 option::none()
             }
@@ -184,10 +176,9 @@ module coin_pool::singel_pool {
             option::none()
         }else {
             let proof_collection = borrow_global_mut<WithdrawProofCollection<CoinType>>(account);
-            let (flag, index) = vector::index_of(&mut proof_collection.proof_indexs, &pool_address);
-            if (flag) {
-                vector::swap_remove(&mut proof_collection.proof_indexs, index);
-                option::some(vector::swap_remove(&mut proof_collection.proofs, index))
+            if (bucket_table::contains(&mut proof_collection.proofs, &pool_address)) {
+                let proof = bucket_table::remove(&mut proof_collection.proofs, &pool_address);
+                option::some(proof)
             } else {
                 option::none()
             }
@@ -226,8 +217,7 @@ module coin_pool::singel_pool {
         assert!(!is_pool_created<CoinType>(creater_addr), POOL_ALREADY_CREATED);
 
         let pool = Pool<CoinType> {
-            coin: coin::zero<CoinType>(),
-            pool_address: creater_addr
+            coin: coin::zero<CoinType>()
         };
         move_to(creater, pool);
 
