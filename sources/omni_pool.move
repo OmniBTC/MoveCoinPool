@@ -1,13 +1,11 @@
 module coin_pool::omni_pool {
     use coin_pool::singel_pool::{RootCapability, Self, get_pool_address_by_root, destroy_proof};
-    use std::vector;
-    use aptos_std::type_info::TypeInfo;
+    use std::option::{Option, Self};
     use std::signer;
-    use aptos_std::type_info;
-    use std::option::Option;
-    use std::option;
-    use aptos_std::event::EventHandle;
-    use aptos_std::event;
+    use std::vector;
+    use aptos_std::event::{EventHandle, Self};
+    use aptos_std::type_info::{TypeInfo, Self};
+    use aptos_framework::bucket_table::{BucketTable, Self};
 
 
     //
@@ -53,7 +51,7 @@ module coin_pool::omni_pool {
     /// owner: All pool owners.
     struct PoolManage has key {
         coin_types: vector<TypeInfo>,
-        creators: vector<address>,
+        creators: BucketTable<TypeInfo, address>,
         owner: address
     }
 
@@ -202,7 +200,7 @@ module coin_pool::omni_pool {
 
         move_to(account, PoolManage {
             coin_types: vector::empty(),
-            creators: vector::empty(),
+            creators: bucket_table::new(1),
             owner: @coin_pool
         });
         move_to(account, UserEventHandle {
@@ -226,25 +224,19 @@ module coin_pool::omni_pool {
         });
     }
 
-    /// Search for already created `CoinType`.
-    fun find_coin_types<CoinType>(): (bool, u64) acquires PoolManage {
-        let coin_type = type_info::type_of<CoinType>();
-        let coin_types = &borrow_global<PoolManage>(@coin_pool).coin_types;
-        vector::index_of(coin_types, &coin_type)
-    }
-
     /// Exist `CoinType`.
     public fun exist_coin_types<CoinType>(): bool acquires PoolManage {
-        let (flag, _) = find_coin_types<CoinType>();
-        flag
+        let creators = &borrow_global<PoolManage>(@coin_pool).creators;
+        bucket_table::contains(creators, &type_info::type_of<CoinType>())
     }
 
     /// Find creator by CoinType
     fun find_creator<CoinType>(): Option<address> acquires PoolManage {
-        let (flag, index) = find_coin_types<CoinType>();
+        let creators = &mut borrow_global_mut<PoolManage>(@coin_pool).creators;
+        let coin_type = type_info::type_of<CoinType>();
+        let flag = bucket_table::contains(creators, &coin_type);
         if (flag) {
-            let creators = &borrow_global<PoolManage>(@coin_pool).creators;
-            let creator = *vector::borrow(creators, index);
+            let creator = *bucket_table::borrow(creators, coin_type);
             option::some(creator)
         }else {
             option::none()
@@ -280,8 +272,9 @@ module coin_pool::omni_pool {
         move_to(creater, pool_info);
 
         let pool_manager = borrow_global_mut<PoolManage>(@coin_pool);
-        vector::push_back(&mut pool_manager.coin_types, type_info::type_of<CoinType>());
-        vector::push_back(&mut pool_manager.creators, create_addr);
+        let coin_type = type_info::type_of<CoinType>();
+        vector::push_back(&mut pool_manager.coin_types, coin_type);
+        bucket_table::add(&mut pool_manager.creators, coin_type, create_addr);
     }
 
     /// Transfer owner.
@@ -542,7 +535,7 @@ module coin_pool::omni_pool {
     /// Facilitate future contract upgrades.
     /// `CoinType`: results in multiple calls.
     /// Returns: root permissions and whitelisting
-    public fun upgrade<CoinType>(from: &signer): (u64, u64,RootCapability<CoinType>, vector<address>) acquires PoolManage, PoolInfo {
+    public fun upgrade<CoinType>(from: &signer): (u64, u64, RootCapability<CoinType>, vector<address>) acquires PoolManage, PoolInfo {
         assert!(is_owner(from), MUST_BEEN_OWNER);
         let result = find_creator<CoinType>();
         assert!(option::is_some(&result), NOT_FIND_CREATOR);

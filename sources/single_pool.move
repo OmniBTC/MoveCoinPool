@@ -103,10 +103,12 @@ module coin_pool::singel_pool {
         proofs: bucket_table::BucketTable<address, WithdrawProof<CoinType>>
     }
 
+    /// Deployed address
     public fun deployed_address(): address {
         @coin_pool
     }
 
+    /// Get pool address.
     public fun get_pool_address_by_root<CoinType>(root: &RootCapability<CoinType>): address {
         root.pool_address
     }
@@ -122,11 +124,12 @@ module coin_pool::singel_pool {
         exists<Pool<CoinType>>(pool_addess)
     }
 
-    #[test_only]
+    /// Exist root collection
     public fun has_root_collection<CoinType>(user_addr: address): bool {
         exists<RootCapabilityCollection<CoinType>>(user_addr)
     }
 
+    /// Exist withdraw collection
     public fun has_withdraw_collection<CoinType>(user_addr: address): bool {
         exists<WithdrawProofCollection<CoinType>>(user_addr)
     }
@@ -134,7 +137,7 @@ module coin_pool::singel_pool {
     /// Add root into collection. Note that it does not do root existence checks.
     public fun add_root_collection<CoinType>(account: &signer, root: RootCapability<CoinType>) acquires RootCapabilityCollection {
         let account_addr = signer::address_of(account);
-        if (!exists<RootCapabilityCollection<CoinType>>(account_addr)) {
+        if (!has_root_collection<CoinType>(account_addr)) {
             move_to(account, RootCapabilityCollection<CoinType> {
                 roots: bucket_table::new<address, RootCapability<CoinType>>(1)
             })
@@ -144,9 +147,9 @@ module coin_pool::singel_pool {
     }
 
     /// Add proof into collection. Note that it does not do proof existence checks.
-    public fun add_proof_collection<CoinType>(account: &signer, proof: WithdrawProof<CoinType>)acquires WithdrawProofCollection {
+    public fun add_proof_collection<CoinType>(account: &signer, proof: WithdrawProof<CoinType>) acquires WithdrawProofCollection {
         let account_addr = signer::address_of(account);
-        if (!exists<WithdrawProofCollection<CoinType>>(account_addr)) {
+        if (!has_withdraw_collection<CoinType>(account_addr)) {
             move_to(account, WithdrawProofCollection<CoinType> {
                 proofs: bucket_table::new<address, WithdrawProof<CoinType>>(1)
             })
@@ -155,9 +158,9 @@ module coin_pool::singel_pool {
         bucket_table::add(&mut proof_collection.proofs, account_addr, proof)
     }
 
-    /// Find root in collection.
+    /// Find root in collection. This is must be private function.
     fun find_root_collection<CoinType>(account: address, pool_address: address): Option<RootCapability<CoinType>> acquires RootCapabilityCollection {
-        if (!exists<RootCapabilityCollection<CoinType>>(account)) {
+        if (!has_root_collection<CoinType>(account)) {
             option::none()
         }else {
             let root_collection = borrow_global_mut<RootCapabilityCollection<CoinType>>(account);
@@ -170,9 +173,9 @@ module coin_pool::singel_pool {
         }
     }
 
-    /// Find proof in collection.
+    /// Find proof in collection. This is must be private function.
     fun find_proof_collection<CoinType>(account: address, pool_address: address): Option<WithdrawProof<CoinType>> acquires WithdrawProofCollection {
-        if (!exists<WithdrawProofCollection<CoinType>>(account)) {
+        if (!has_withdraw_collection<CoinType>(account)) {
             option::none()
         }else {
             let proof_collection = borrow_global_mut<WithdrawProofCollection<CoinType>>(account);
@@ -196,6 +199,7 @@ module coin_pool::singel_pool {
         move_to(account, recorder);
     }
 
+    /// Add pool into recorder
     fun add_pool_recorder<CoinType>(pool_address: address) acquires PoolRecorder {
         let pool_recorder = borrow_global_mut<PoolRecorder>(deployed_address());
         let pool_type = type_info::type_of<Pool<CoinType>>();
