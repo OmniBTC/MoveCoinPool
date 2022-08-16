@@ -108,6 +108,14 @@ module coin_pool::singel_pool {
         @coin_pool
     }
 
+    /// Withdraw proof amount
+    public fun withdraw_proof_amount<CoinType>(user_addr: address, pool_address: address): u64 acquires WithdrawProofCollection{
+        // When the `bucket_table::borrow()` doesn't need a mutable reference, use `borrow_global()`
+        let withdraw_proof_collection = borrow_global_mut<WithdrawProofCollection<CoinType>>(user_addr);
+        assert!(bucket_table::contains(&mut withdraw_proof_collection.proofs, &pool_address), PROOF_NOT_EXIST);
+        bucket_table::borrow(&mut withdraw_proof_collection.proofs, pool_address).amount
+    }
+
     /// Get pool address.
     public fun get_pool_address_by_root<CoinType>(root: &RootCapability<CoinType>): address {
         root.pool_address

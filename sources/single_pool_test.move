@@ -1,7 +1,7 @@
 #[test_only]
 module coin_pool::singel_pool_test {
     use std::signer;
-    use coin_pool::singel_pool::{initialize, pool_recorder_initialized, create_pool, is_pool_created, create_pool_program, add_root_collection, has_root_collection, extract_root, RootCapability, supply, has_withdraw_collection, withdraw, withdraw_root};
+    use coin_pool::singel_pool::{initialize, pool_recorder_initialized, create_pool, is_pool_created, create_pool_program, add_root_collection, has_root_collection, extract_root, RootCapability, supply, withdraw, withdraw_root, withdraw_proof_amount};
     use aptos_framework::coin::{FakeMoney, create_fake_money, transfer, balance, register_for_test};
     use aptos_framework::block::initialize_block_metadata;
     use std::option::{is_some, extract};
@@ -92,7 +92,7 @@ module coin_pool::singel_pool_test {
 
         let pool_addr = signer::address_of(deployer);
         supply<FakeMoney>(user, pool_addr,50);
-        assert!(has_withdraw_collection<FakeMoney>(user_addr), 102);
+        assert!(withdraw_proof_amount<FakeMoney>(user_addr, pool_addr) == 50, 102);
         assert!(balance<FakeMoney>(user_addr) == 0, 103);
     }
 
@@ -116,7 +116,8 @@ module coin_pool::singel_pool_test {
         let pool_addr = signer::address_of(deployer);
 
         assert!(balance<FakeMoney>(user_addr) == 0, 104);
+        assert!(withdraw_proof_amount<FakeMoney>(user_addr, pool_addr) == 50, 105);
         withdraw<FakeMoney>(user, pool_addr, 50);
-        assert!(balance<FakeMoney>(user_addr) == 50, 105)
+        assert!(balance<FakeMoney>(user_addr) == 50, 106)
     }
 }
