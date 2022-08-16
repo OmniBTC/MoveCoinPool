@@ -78,8 +78,8 @@ module coin_pool::singel_pool_test {
         assert!(has_root_collection<FakeMoney>(user_addr), 104)
     }
 
-    #[test(aptos_framework=@aptos_framework, source=@0x1, deployer=@0x11, user=@0x66)]
-    fun test_supply(aptos_framework: &signer, source: &signer, deployer: &signer, user: &signer) {
+    #[test_only]
+    fun setup_supply(aptos_framework: &signer, source: &signer, deployer: &signer, user: &signer, amount: u64) {
         initialize_block_metadata(aptos_framework, 1);
         initialize(deployer);
 
@@ -87,7 +87,13 @@ module coin_pool::singel_pool_test {
         create_fake_money(source, user, 100);
 
         let user_addr = signer::address_of(user);
-        transfer<FakeMoney>(source, user_addr, 50);
+        transfer<FakeMoney>(source, user_addr, amount);
+    }
+
+    #[test(aptos_framework=@aptos_framework, source=@0x1, deployer=@0x11, user=@0x66)]
+    fun test_supply(aptos_framework: &signer, source: &signer, deployer: &signer, user: &signer) {
+        setup_supply(aptos_framework, source, deployer, user, 50);
+        let user_addr = signer::address_of(user);
         assert!(balance<FakeMoney>(user_addr) == 50, 101);
 
         let pool_addr = signer::address_of(deployer);
@@ -96,9 +102,16 @@ module coin_pool::singel_pool_test {
         assert!(balance<FakeMoney>(user_addr) == 0, 103);
     }
 
+    #[test_only]
+    fun setup_withdraw(aptos_framework: &signer, source: &signer, deployer: &signer, user: &signer, amount: u64) {
+        setup_supply(aptos_framework, source, deployer, user, amount);
+        let pool_addr = signer::address_of(deployer);
+        supply<FakeMoney>(user, pool_addr, amount);
+    }
+
     #[test(aptos_framework=@aptos_framework, source=@0x1, deployer=@0x11, user=@0x66)]
     fun test_withdraw_root(aptos_framework: &signer, source: &signer, deployer: &signer, user: &signer) {
-        test_supply(aptos_framework, source, deployer, user);
+        setup_withdraw(aptos_framework, source, deployer, user, 50);
         let user_addr = signer::address_of(user);
         let pool_addr = signer::address_of(deployer);
 
@@ -111,7 +124,7 @@ module coin_pool::singel_pool_test {
 
     #[test(aptos_framework=@aptos_framework, source=@0x1, deployer=@0x11, user=@0x66)]
     fun test_withdraw(aptos_framework: &signer, source: &signer, deployer: &signer, user: &signer) {
-        test_supply(aptos_framework, source, deployer, user);
+        setup_withdraw(aptos_framework, source, deployer, user, 50);
         let user_addr = signer::address_of(user);
         let pool_addr = signer::address_of(deployer);
 
