@@ -86,6 +86,7 @@ module coin_pool::singel_pool {
 
     /// root privilege collection.
     struct RootCapabilityCollection<phantom CoinType> has key {
+        /// pool_address -> RootCapability
         roots: bucket_table::BucketTable<address, RootCapability<CoinType>>
     }
 
@@ -100,6 +101,7 @@ module coin_pool::singel_pool {
 
     /// Proof collection
     struct WithdrawProofCollection<phantom CoinType> has key {
+        /// pool_address -> WithdrawProof
         proofs: bucket_table::BucketTable<address, WithdrawProof<CoinType>>
     }
 
@@ -119,6 +121,16 @@ module coin_pool::singel_pool {
     /// Get pool address.
     public fun get_pool_address_by_root<CoinType>(root: &RootCapability<CoinType>): address {
         root.pool_address
+    }
+
+    /// Get pool address.
+    public fun get_pool_address_by_proof<CoinType>(proof: &WithdrawProof<CoinType>): address {
+        proof.pool_address
+    }
+
+    /// Get amount.
+    public fun get_amount_by_proof<CoinType>(proof: &WithdrawProof<CoinType>): u64 {
+        proof.amount
     }
 
     /// Returns `true` if pool recoreder has been initialized.
@@ -166,12 +178,13 @@ module coin_pool::singel_pool {
         bucket_table::add(&mut proof_collection.proofs, proof.pool_address, proof);
     }
 
-    /// Find root in collection. This is must be private function.
-    fun find_root_collection<CoinType>(account: address, pool_address: address): Option<RootCapability<CoinType>> acquires RootCapabilityCollection {
-        if (!has_root_collection<CoinType>(account)) {
+    /// Find root in collection.
+    public fun find_root_collection<CoinType>(account: &signer, pool_address: address): Option<RootCapability<CoinType>> acquires RootCapabilityCollection {
+        let account_addr = signer::address_of(account);
+        if (!has_root_collection<CoinType>(account_addr)) {
             option::none()
         }else {
-            let root_collection = borrow_global_mut<RootCapabilityCollection<CoinType>>(account);
+            let root_collection = borrow_global_mut<RootCapabilityCollection<CoinType>>(account_addr);
             if (bucket_table::contains(&mut root_collection.roots, &pool_address)) {
                 let root_capacity = bucket_table::remove(&mut root_collection.roots, &pool_address);
                 option::some(root_capacity)
@@ -181,12 +194,13 @@ module coin_pool::singel_pool {
         }
     }
 
-    /// Find proof in collection. This is must be private function.
-    fun find_proof_collection<CoinType>(account: address, pool_address: address): Option<WithdrawProof<CoinType>> acquires WithdrawProofCollection {
-        if (!has_withdraw_collection<CoinType>(account)) {
+    /// Find proof in collection.
+    public fun find_proof_collection<CoinType>(account: &signer, pool_address: address): Option<WithdrawProof<CoinType>> acquires WithdrawProofCollection {
+        let account_addr = signer::address_of(account);
+        if (!has_withdraw_collection<CoinType>(account_addr)) {
             option::none()
         }else {
-            let proof_collection = borrow_global_mut<WithdrawProofCollection<CoinType>>(account);
+            let proof_collection = borrow_global_mut<WithdrawProofCollection<CoinType>>(account_addr);
             if (bucket_table::contains(&mut proof_collection.proofs, &pool_address)) {
                 let proof = bucket_table::remove(&mut proof_collection.proofs, &pool_address);
                 option::some(proof)
@@ -252,8 +266,7 @@ module coin_pool::singel_pool {
 
     /// Extract root privileges from owner.
     public fun extract_root<CoinType>(account: &signer, pool_address: address): Option<RootCapability<CoinType>> acquires RootCapabilityCollection {
-        let account_addr = signer::address_of(account);
-        find_root_collection<CoinType>(account_addr, pool_address)
+        find_root_collection<CoinType>(account, pool_address)
     }
 
     /// Destroy root privileges by program
@@ -263,8 +276,7 @@ module coin_pool::singel_pool {
 
     /// Destroy root privileges.
     public entry fun destroy_root<CoinType>(account: &signer, pool_address: address)  acquires RootCapabilityCollection {
-        let account_addr = signer::address_of(account);
-        let result = find_root_collection<CoinType>(account_addr, pool_address);
+        let result = find_root_collection<CoinType>(account, pool_address);
         assert!(option::is_some(&result), POOL_ROOT_NOT_EXIST);
 
         destroy_root_program(option::destroy_some(result));
@@ -295,9 +307,8 @@ module coin_pool::singel_pool {
     /// WithdrawProof is managed by WithdrawProofCollection.
     public entry fun supply<CoinType>(account: &signer, pool_address: address, amount: u64) acquires Pool, WithdrawProofCollection {
         let proof = supply_internal<CoinType>(account, pool_address, amount);
-        let account_addr = signer::address_of(account);
 
-        let result = find_proof_collection<CoinType>(account_addr, pool_address);
+        let result = find_proof_collection<CoinType>(account, pool_address);
         if (option::is_none(&result)) {
             option::destroy_none(result);
             add_proof_collection(account, proof);
@@ -331,7 +342,7 @@ module coin_pool::singel_pool {
     /// Use the root stored in the account address to withdraw.
     public entry fun withdraw_root<CoinType>(account: &signer, pool_address: address, amount: u64) acquires Pool, RootCapabilityCollection {
         let account_addr = signer::address_of(account);
-        let result = find_root_collection<CoinType>(account_addr, pool_address);
+        let result = find_root_collection<CoinType>(account, pool_address);
         assert!(option::is_some(&result), POOL_ROOT_NOT_EXIST);
 
         let root = option::destroy_some(result);
@@ -345,7 +356,7 @@ module coin_pool::singel_pool {
     /// Use the proof stored in the account address to withdraw.
     public entry fun withdraw<CoinType>(account: &signer, pool_address: address, amount: u64) acquires Pool, WithdrawProofCollection {
         let account_addr = signer::address_of(account);
-        let result = find_proof_collection<CoinType>(account_addr, pool_address);
+        let result = find_proof_collection<CoinType>(account, pool_address);
         assert!(option::is_some(&result), PROOF_NOT_EXIST);
 
         let proof = option::destroy_some(result);

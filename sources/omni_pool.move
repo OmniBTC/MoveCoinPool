@@ -51,6 +51,7 @@ module coin_pool::omni_pool {
     /// owner: All pool owners.
     struct PoolManage has key {
         coin_types: vector<TypeInfo>,
+        /// coin_type -> creator
         creators: BucketTable<TypeInfo, address>,
         owner: address
     }
