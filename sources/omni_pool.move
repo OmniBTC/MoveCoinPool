@@ -232,7 +232,7 @@ module coin_pool::omni_pool {
     }
 
     /// Find creator by CoinType
-    fun find_creator<CoinType>(): Option<address> acquires PoolManage {
+    public fun find_creator<CoinType>(): Option<address> acquires PoolManage {
         let creators = &mut borrow_global_mut<PoolManage>(@coin_pool).creators;
         let coin_type = type_info::type_of<CoinType>();
         let flag = bucket_table::contains(creators, &coin_type);
@@ -247,7 +247,7 @@ module coin_pool::omni_pool {
     /// Find out if the account is in the whitelist
     /// `creator`: `PoolInfo` is stored under the pool creator account
     /// `account`: Account found
-    fun find_whitelist<CoinType>(creator: address, account: address): (bool, u64) acquires PoolInfo {
+    public fun find_whitelist<CoinType>(creator: address, account: address): (bool, u64) acquires PoolInfo {
         let pool_info = borrow_global<PoolInfo<CoinType>>(creator);
         vector::index_of(&pool_info.whitelist, &account)
     }
@@ -258,7 +258,7 @@ module coin_pool::omni_pool {
     /// `token_id`: The token id corresponding to the pool is in the Omni Btc protocol.
     public entry fun create_pool<CoinType>(creater: &signer, chain_id: u64, token_id: u64) acquires PoolManage {
         assert!(is_owner(creater), MUST_BEEN_OWNER);
-        assert!(exist_coin_types<CoinType>(), EXIST_SAME_COINTYPE);
+        assert!(!exist_coin_types<CoinType>(), EXIST_SAME_COINTYPE);
 
         let create_addr = signer::address_of(creater);
 
@@ -333,7 +333,7 @@ module coin_pool::omni_pool {
         event_handle.next_supply_nonce = event_handle.next_supply_nonce + 1;
     }
 
-    /// Relayer to process supply.
+    /// Relayer to process failed supply.
     public entry fun supply_relayer<CoinType>(relayer: &signer, account: address, amount: u64, nonce: u64)  acquires PoolManage, PoolInfo, RelayerEventHandle {
         let addr = signer::address_of(relayer);
         let creator = check_user<CoinType>();
@@ -460,7 +460,7 @@ module coin_pool::omni_pool {
         event_handle.next_repay_nonce = event_handle.next_repay_nonce + 1;
     }
 
-    /// Relayer to process repay.
+    /// Relayer to process failed repay.
     public entry fun repay_relayer<CoinType>(relayer: &signer, account: address, amount: u64, nonce: u64)  acquires PoolManage, PoolInfo, RelayerEventHandle {
         let addr = signer::address_of(relayer);
         let creator = check_user<CoinType>();
