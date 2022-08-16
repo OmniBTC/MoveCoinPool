@@ -1,12 +1,12 @@
 module coin_pool::omni_pool {
-    use coin_pool::singel_pool::{RootCapability, Self, get_pool_address_by_root, destroy_proof};
     use std::option::{Option, Self};
     use std::signer;
     use std::vector;
+
+    use aptos_framework::bucket_table::{BucketTable, Self};
     use aptos_std::event::{EventHandle, Self};
     use aptos_std::type_info::{TypeInfo, Self};
-    use aptos_framework::bucket_table::{BucketTable, Self};
-
+    use coin_pool::singel_pool::{RootCapability, Self, get_pool_address_by_root, destroy_proof};
 
     //
     // Errors.

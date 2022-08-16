@@ -1,14 +1,13 @@
 module coin_pool::singel_pool {
-    use std::signer;
     use std::option::{Option, Self};
+    use std::signer;
     use std::vector;
-    use aptos_std::type_info::TypeInfo;
-    use aptos_std::event::EventHandle;
-    use aptos_std::type_info;
-    use aptos_std::event;
-    use aptos_framework::coin::{Coin, Self};
-    use aptos_framework::bucket_table;
+
     use aptos_framework::block::get_current_block_height;
+    use aptos_framework::bucket_table;
+    use aptos_framework::coin::{Coin, Self};
+    use aptos_std::event::{Self, EventHandle};
+    use aptos_std::type_info::{Self, TypeInfo};
 
     //
     // Errors.
@@ -111,7 +110,7 @@ module coin_pool::singel_pool {
     }
 
     /// Withdraw proof amount
-    public fun withdraw_proof_amount<CoinType>(user_addr: address, pool_address: address): u64 acquires WithdrawProofCollection{
+    public fun withdraw_proof_amount<CoinType>(user_addr: address, pool_address: address): u64 acquires WithdrawProofCollection {
         // When the `bucket_table::borrow()` doesn't need a mutable reference, use `borrow_global()`
         let withdraw_proof_collection = borrow_global_mut<WithdrawProofCollection<CoinType>>(user_addr);
         assert!(bucket_table::contains(&mut withdraw_proof_collection.proofs, &pool_address), PROOF_NOT_EXIST);
